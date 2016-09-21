@@ -6,31 +6,54 @@
 #include <string.h>
 
 #include <gps.h>
+#include <nmea.h>
 
 int
 main (void)
 {
-    int uart_fd = OpenGPSIface();
+    int uart_fd;
 	unsigned char recv_message[256];
-	unsigned char rx_buffer[1];
-	int i, rx_len, id;
-	/* header (2)	class (1) 	id (1) 	length (2)	payload (36) crc (2) */
-	unsigned char CFG_NAV5[GPS_OVERHEAD + 36];
-	unsigned char TEST_MSG[GPS_OVERHEAD];
-	
+	int i, rx_len;
+	MessageIdentifier id;
+	uart_fd = OpenGPSIface(500);
 	if (uart_fd == -1)
 	{
 	    printf("No GPS Device\n");
 	    return 0;
 	}
-
+	int first = 1;
 	while(1)
 	{
-		/* -1 means id failure */
-		if (id = GPSReceiveMessage(uart_fd, recv_message, &rx_len), id != -1)
+		if (first)
 		{
+			GetGPSMessage(uart_fd, CFG_NAV5);
+			SetGPSMessage(uart_fd, CFG_NAV5);
+			/*
+			GetGPSMessage(uart_fd, CFG_NAV5);
+			GetGPSMessage(uart_fd, CFG_NAVX5);
+			GetGPSMessage(uart_fd, CFG_NMEA);
+			*/
+			first = 0;
+		}
+		/* -1 means id failure */
+		if (id = GPSReceiveMessage(uart_fd, recv_message, &rx_len), id != ERROR)
+		{
+			if (id == NMEA_ID)
+			{
+				if (strncmp(recv_message+2, "GGA,", 4) == 0)
+				{
+					ProcessGGA(recv_message+6);
+					/* Global fix frame arrived */
+					fprintf(stderr, "%s", recv_message);
+				}
+				if (strncmp(recv_message+2, "VTG,", 4) == 0)
+				{
+					ProcessVTG(recv_message+6);
+					/* Velocity frame arrived */
+					fprintf(stderr, "%s", recv_message);
+				}
+			}
 			/* Process the message */
-
 		}
 	}
 }

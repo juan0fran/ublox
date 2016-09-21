@@ -7,6 +7,24 @@
 
 #include <gps.h>
 
+static enum Overhead{
+	GPS_OVERHEAD 	= 8,
+	CRC_OVERHEAD	= 4,
+	PAYLOAD_START	= 6,
+	FIRST_CRC		= 6,
+	SECOND_CRC 		= 7,
+}Overhead;
+
+static int init_timeout;
+
+/*
+#define GPS_OVERHEAD	8
+#define CRC_OVERHEAD	4
+#define PAYLOAD_START	6
+#define FIRST_CRC		6
+#define SECOND_CRC		7
+*/
+
 static unsigned char UBX_header[2] = {0xB5, 0x62};
 
 static void
@@ -28,15 +46,38 @@ GPSChecksum(
 	*check_b = (unsigned char) CK_B & 0xFF;
 }
 
+static void SetTimeout(int fd, int timeout)
+{
+ 	struct termios tty;
+    memset (&tty, 0, sizeof tty);
+    if (tcgetattr (fd, &tty) != 0)
+    {
+            exit(0);
+    }
+    if (timeout == 0)
+    {
+    	tty.c_cc[VMIN]  = 0;	
+    	tty.c_cc[VTIME] = 0;            // 0.5 seconds read timeout
+    }
+    else
+    {
+		tty.c_cc[VMIN]  = 1;
+    	tty.c_cc[VTIME] = (int) (timeout/100);            // 0.5 seconds read timeout
+    }
+    
+    if (tcsetattr (fd, TCSANOW, &tty) != 0)
+    	exit(0);
+}
+
 int
-OpenGPSIface(void)
+OpenGPSIface(int ms_timeout)
 {
 	int uart0_filestream = -1;
 	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY);		//Open in non blocking read/write mode
 	if (uart0_filestream == -1)
 	{
 		//ERROR - CAN'T OPEN SERIAL PORT
-		printf("Error - Unable to open UART.  Ensure it is not in use by another application\n");
+		fprintf(stderr, "Error - Unable to open UART.  Ensure it is not in use by another application\n");
 		exit(0);
 	}
 	struct termios options;
@@ -47,17 +88,10 @@ OpenGPSIface(void)
 	options.c_lflag = 0;
 	tcflush(uart0_filestream, TCIFLUSH);
 	tcsetattr(uart0_filestream, TCSANOW, &options);
- 	struct termios tty;
-    memset (&tty, 0, sizeof tty);
-    if (tcgetattr (uart0_filestream, &tty) != 0)
-    {
-            exit(0);
-    }
 
-    tty.c_cc[VMIN]  = 1;
-    tty.c_cc[VTIME] = 10;            // 0.5 seconds read timeout
-    if (tcsetattr (uart0_filestream, TCSANOW, &tty) != 0)
-    	exit(0);
+	init_timeout = ms_timeout;
+	
+	SetTimeout(uart0_filestream, ms_timeout);
 
 	return uart0_filestream;
 }
@@ -67,8 +101,47 @@ GPSReceiveNMEA(
 	int uart_fd,
 	unsigned char * recv_message)
 {
+	unsigned char rx_buffer[1];
+	unsigned char string[256];
+	int offset;
+	int rx_len;
+	int i;
+	int checksum;
+	int read_checksum;
+	offset = 0;
+	do
+	{
+		if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+		{	
+			memcpy(recv_message+offset, rx_buffer, 1);
+			offset++;
+		}
+		else
+		{
+			return -1;
+		}
 
-	return -1;
+	}while(rx_buffer[0] != '\n');
+	rx_len = offset;
+	checksum = 0;
+	for (i = 0; i < offset - 5; i++)
+	{
+		checksum ^= recv_message[i];
+	}
+	i = 0;
+	while(recv_message[i] != (unsigned char) '*')
+	{
+		i++;
+	}
+	sscanf(recv_message+i, "*%02x\r\n", &read_checksum);
+	if (checksum == read_checksum)
+	{
+		return rx_len;
+	}
+	else
+	{
+		return -1;
+	}
 }
 
 static int
@@ -82,7 +155,6 @@ GPSReceiveUBX(
 	int rx_len;
 	int offset;
 	int msg_len;
-
 	if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
 	{
 		if (rx_buffer[0] == 0x62)
@@ -171,7 +243,7 @@ GPSReceiveUBX(
 /* -1 error while reading a packet! */
 /* otherwise: 0 on NMEA msg, 1 on UBX message */
 
-int 
+MessageIdentifier 
 GPSReceiveMessage(
 	int uart_fd,
 	unsigned char * recv_message,
@@ -181,42 +253,78 @@ GPSReceiveMessage(
 	int rx_len;
 	if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
 	{
-		if (rx_buffer[0] == NMEA_ID)
+		if (rx_buffer[0] == (unsigned char) NMEA_ID)
 		{
 			if (rx_len = GPSReceiveNMEA(uart_fd, recv_message), rx_len != -1)
 			{
-				printf("NMEA message received from GPS\n");
 				recv_message[rx_len] = '\0';
-				printf("%s\n", recv_message);
 				*len = rx_len;
-				return 0;
+				return NMEA_ID;
 			}
 			else
 			{
-				return -1;
+				return ERROR;
 			}			
 		}
-		if (rx_buffer[0] == UBX_ID)
+		if (rx_buffer[0] == (unsigned char) UBX_ID)
 		{
 			if (rx_len = GPSReceiveUBX(uart_fd, recv_message), rx_len != -1) 
 			{
-				printf("Message Received from GPS\n");
-				printf("Class: %02x. ID: %02x\n", recv_message[0], recv_message[1]);
 				*len = rx_len;
-				return 1;
+				return UBX_ID;
 			}
 			else
 			{
-				return -1;
+				return ERROR;
 			}
 		}
-		return -1;
+		return ERROR;
 	}
 	else
 	{
-		return -1; 
+		return ERROR; 
 		/* i.e. no message */
 	}
+}
+
+
+// -------------------------------------------------------------------------------------------------
+static void _print_block(const unsigned char *pblock, size_t size)
+// -------------------------------------------------------------------------------------------------
+{
+    size_t i;
+    char   c;
+    size_t lsize = 10;
+    int    flush = 1;
+
+    fprintf(stderr, "     ");
+
+    for (i=0; i<lsize; i++)
+    {
+        fprintf(stderr, "%d    ", (int)i);
+    }
+
+    for (i=0; i<size; i++)
+    {
+        if (i % lsize == 0)
+        {
+            fprintf(stderr, "\n%03d: ", (int)i);
+        }
+
+        if ((pblock[i] < 0x20) || (pblock[i] >= 0x7F))
+        {
+            c = '.';
+        }
+        else
+        {
+            c = (char) pblock[i];
+        }
+
+        fprintf(stderr, "%02X:%c ", pblock[i], (char)c);
+    }
+    fprintf(stderr, "\n\n");
+    if (flush)
+        fflush(stderr);
 }
 
 static void
@@ -224,28 +332,39 @@ PrintGPSUBXMessage(
 	unsigned char * p,
 	int len)
 {
-	int i;
-	for (i = 0; i < len - CRC_OVERHEAD; i++)
-	{
-		printf("%02x ", p[i+CRC_OVERHEAD]);
-	}
-	printf("\n");	
+	_print_block(p+CRC_OVERHEAD, len - CRC_OVERHEAD);
+}
+
+static void clean_read_buffer(int fd)
+{
+	unsigned char buffer[256];
+	SetTimeout(fd, 0);
+	while(read(fd, buffer, 256) > 0);
+	SetTimeout(fd, init_timeout);
 }
 
 int
 GetGPSMessage(
 	int uart_fd,
 	MessageType t)
-{
+{	
+	int limit = 4;
+	int recv_limit = 256;
 	unsigned char buffer[256];
 	unsigned char recv_message[256];
 	unsigned char tmp;
 	int msg_len;
 	int rx_len;
 	int i;
+	int timeout = 0;
 	int message_delivered = 0;
-	while(!message_delivered)
+	clean_read_buffer(uart_fd);
+	while(!message_delivered && (++timeout < limit))
 	{
+		if (timeout > 1)
+		{
+			fprintf(stderr, "Message not deivered, trying again\n");
+		}
 		switch (t)
 		{
 			case CFG_NAV5:
@@ -308,35 +427,44 @@ GetGPSMessage(
 				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
 			break;
 		}
-		if (rx_len = GPSReceiveUBX(uart_fd, recv_message), rx_len != -1)
+		timeout = 0;
+		while( (rx_len = read(uart_fd, buffer, 1), rx_len > 0 ) && message_delivered == 0 && (++timeout < recv_limit) )
 		{
-			switch (t)
+			if (buffer[0] == (unsigned char) UBX_ID)
 			{
-				case CFG_NAV5:
-					if (recv_message[0] == 0x06 && recv_message[1] == 0x24)
+				if (rx_len = GPSReceiveUBX(uart_fd, recv_message), rx_len != -1)
+				{
+					switch (t)
 					{
-						printf("CFG NAV5 received\n");
-						PrintGPSUBXMessage(recv_message, rx_len);
-					}
-				break;
+						case CFG_NAV5:
+							if (recv_message[0] == 0x06 && recv_message[1] == 0x24)
+							{
+								fprintf(stderr, "CFG NAV5 received:\n");
+								PrintGPSUBXMessage(recv_message, rx_len);
+								message_delivered = 1;
+							}
+						break;
 
-				case CFG_NAVX5:
-					if (recv_message[0] == 0x06 && recv_message[1] == 0x23)
-					{
-						printf("CFG NAVX5 received\n");
-						PrintGPSUBXMessage(recv_message, rx_len);
-					}
-				break;
+						case CFG_NAVX5:
+							if (recv_message[0] == 0x06 && recv_message[1] == 0x23)
+							{
+								fprintf(stderr, "CFG NAVX5 received:\n");
+								PrintGPSUBXMessage(recv_message, rx_len);
+								message_delivered = 1;
+							}
+						break;
 
-				case CFG_NMEA:
-					if (recv_message[0] == 0x06 && recv_message[1] == 0x17)
-					{
-						printf("CFG NMEA received\n");
-						PrintGPSUBXMessage(recv_message, rx_len);
+						case CFG_NMEA:
+							if (recv_message[0] == 0x06 && recv_message[1] == 0x17)
+							{
+								fprintf(stderr, "CFG NMEA received:\n");
+								PrintGPSUBXMessage(recv_message, rx_len);
+								message_delivered = 1;
+							}
+						break;
 					}
-				break;
+				}
 			}
-			message_delivered = 1;
 		}
 	}
 	return 0;
@@ -347,22 +475,96 @@ SetGPSMessage(
 	int uart_fd,
 	MessageType t)
 {
-	switch (t)
+	unsigned char buffer[256];
+	unsigned char recv_message[256];
+	unsigned char tmp;
+	int msg_len;
+	int rx_len;
+	int i;
+	int message_delivered = 0;
+	while(!message_delivered)
 	{
-		case CFG_NAV5:
+		switch (t)
+		{
+			case CFG_NAV5:
+				/* HEADER START */
+				memcpy(buffer, UBX_header, sizeof(UBX_header));
+				tmp = 0x06; /* class */
+				memcpy(buffer+2, &tmp, 1);
+				tmp = 0x24; /* id */
+				memcpy(buffer+3, &tmp, 1);
+				/* HEADER END */
+				/* Length equal to 0 to GET */
+				msg_len = 36;
+				buffer[4] = msg_len&0xFF;
+				buffer[5] = (msg_len>>8)&0xFF;
+				memset(buffer + PAYLOAD_START, 0, msg_len);
+				buffer[PAYLOAD_START] = 0x01;
+				buffer[PAYLOAD_START + 1] = 0x00;
+				buffer[PAYLOAD_START + 2] = 7;
+				GPSChecksum(buffer + msg_len + FIRST_CRC,  	/* First CRC character */
+							buffer + msg_len + SECOND_CRC, 	/* Second CRC character */
+							buffer + 2, 					/* buffer without sync word */
+							msg_len + CRC_OVERHEAD);		/* payload length + len (2) + class (1) + id (1) */
+				/* Message is complete now */
+				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
+			break;
 
+			case CFG_NAVX5:
+				/* HEADER START */
+				memcpy(buffer, UBX_header, sizeof(UBX_header));
+				tmp = 0x06; /* class */
+				memcpy(buffer+2, &tmp, 1);
+				tmp = 0x23; /* id */
+				memcpy(buffer+3, &tmp, 1);
+				/* HEADER END */
+				/* Length equal to 0 to GET */
+				msg_len = 0;
+				buffer[4] = msg_len&0xFF;
+				buffer[5] = (msg_len>>8)&0xFF;
+				GPSChecksum(buffer + msg_len + FIRST_CRC,  	/* First CRC character */
+							buffer + msg_len + SECOND_CRC, 	/* Second CRC character */
+							buffer + 2, 					/* buffer without sync word */
+							msg_len + CRC_OVERHEAD);		/* payload length + len (2) + class (1) + id (1) */
+				/* Message is complete now */
+				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
+			break;
 
-		break;
-
-		case CFG_NAVX5:
-
-
-		break;
-
-		case CFG_NMEA:
-
-
-		break;
+			case CFG_NMEA:
+				/* HEADER START */
+				memcpy(buffer, UBX_header, sizeof(UBX_header));
+				tmp = 0x06; /* class */
+				memcpy(buffer+2, &tmp, 1);
+				tmp = 0x17; /* id */
+				memcpy(buffer+3, &tmp, 1);
+				/* HEADER END */
+				/* Length equal to 0 to GET */
+				msg_len = 0;
+				buffer[4] = msg_len&0xFF;
+				buffer[5] = (msg_len>>8)&0xFF;
+				GPSChecksum(buffer + msg_len + FIRST_CRC,  	/* First CRC character */
+							buffer + msg_len + SECOND_CRC, 	/* Second CRC character */
+							buffer + 2, 					/* buffer without sync word */
+							msg_len + CRC_OVERHEAD);		/* payload length + len (2) + class (1) + id (1) */
+				/* Message is complete now */
+				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
+			break;
+		}
+		while( (rx_len = read(uart_fd, buffer, 1), rx_len > 0 ) && message_delivered == 0)
+		{
+			if (buffer[0] == (unsigned char) UBX_ID)
+			{
+				if (rx_len = GPSReceiveUBX(uart_fd, recv_message), rx_len != -1)
+				{
+					if (recv_message[0] == 0x05 && recv_message[1] == 0x01)
+					{
+						fprintf(stderr, "ACK received:\n");
+						PrintGPSUBXMessage(recv_message, rx_len);
+						message_delivered = 1;
+					}
+				}
+			}
+		}
 	}
 	return 0;
 }
