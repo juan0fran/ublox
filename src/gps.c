@@ -16,15 +16,6 @@ static enum Overhead{
 }Overhead;
 
 static int init_timeout;
-
-/*
-#define GPS_OVERHEAD	8
-#define CRC_OVERHEAD	4
-#define PAYLOAD_START	6
-#define FIRST_CRC		6
-#define SECOND_CRC		7
-*/
-
 static unsigned char UBX_header[2] = {0xB5, 0x62};
 
 static void

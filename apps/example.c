@@ -16,6 +16,7 @@ main (void)
 	int i, rx_len;
 	MessageIdentifier id;
 	uart_fd = OpenGPSIface(500);
+	initBeaconMessage();
 	if (uart_fd == -1)
 	{
 	    printf("No GPS Device\n");
@@ -42,15 +43,21 @@ main (void)
 			{
 				if (strncmp(recv_message+2, "GGA,", 4) == 0)
 				{
+					fprintf(stderr, "%s", recv_message);
 					ProcessGGA(recv_message+6);
 					/* Global fix frame arrived */
-					fprintf(stderr, "%s", recv_message);
 				}
 				if (strncmp(recv_message+2, "VTG,", 4) == 0)
 				{
+					fprintf(stderr, "%s", recv_message);
 					ProcessVTG(recv_message+6);
 					/* Velocity frame arrived */
+				}
+				if (strncmp(recv_message+2, "RMC,", 4) == 0)
+				{
 					fprintf(stderr, "%s", recv_message);
+					ProcessRMC(recv_message+6);
+					/* Time frame arrvied */
 				}
 			}
 			/* Process the message */
