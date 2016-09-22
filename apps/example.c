@@ -16,26 +16,24 @@ main (void)
 	int i, rx_len;
 	MessageIdentifier id;
 	uart_fd = OpenGPSIface(500);
-	initBeaconMessage();
+	initBeaconMessage("localhost", "52001");
 	if (uart_fd == -1)
 	{
 	    printf("No GPS Device\n");
 	    return 0;
 	}
-	int first = 1;
+	if (SetGPSMessage(uart_fd, CFG_NAV5) != 1)
+	{
+		printf("Error\n");
+		exit(-1);
+	}
+	if (GetGPSMessage(uart_fd, CFG_NAV5) != 1)
+	{
+		exit(-1);
+		printf("Error\n");
+	}
 	while(1)
 	{
-		if (first)
-		{
-			GetGPSMessage(uart_fd, CFG_NAV5);
-			SetGPSMessage(uart_fd, CFG_NAV5);
-			/*
-			GetGPSMessage(uart_fd, CFG_NAV5);
-			GetGPSMessage(uart_fd, CFG_NAVX5);
-			GetGPSMessage(uart_fd, CFG_NMEA);
-			*/
-			first = 0;
-		}
 		/* -1 means id failure */
 		if (id = GPSReceiveMessage(uart_fd, recv_message, &rx_len), id != ERROR)
 		{
@@ -60,7 +58,6 @@ main (void)
 					/* Time frame arrvied */
 				}
 			}
-			/* Process the message */
 		}
 	}
 }

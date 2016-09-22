@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
+#include <cc_beacon_iface.h>
 
 #include <nmea.h>
 #include <gps.h>
@@ -21,24 +22,38 @@ static double 			gps_alt_geo;
 static double 			gps_vel;
 static double 			gps_course;
 
-void 
-initBeaconMessage()
+static int 				beacon_fd;
+
+void
+initBeaconMessage(char * addr, char * port)
 {
+	beacon_fd = BeaconConnect(addr, port);
 	have_time 	= false;
 	have_pos	= false;
 	have_vel 	= false;
 }
 
+void
+closeBeaconMessage()
+{
+	BeaconClose(beacon_fd);
+}
+
 static int
 SetBeaconMessage()
 {	
+	char str[256];
 	if (have_time == true && have_vel == true && have_pos == true)
 	{	
-		printf("Time: %ld, Quality: %d, SV: %d, Lat: %f, Lon: %f, Alt (sea): %f, Alt (geo): %f, Vel: %f, Course: %f\n",
+		sprintf(str, "%ld,%d,%d,%lf,%lf,%lf,%lf,%lf,%lf\r\n",
+				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course);
+		printf("%s", str);
+		printf("Time: %ld, Quality: %d, SV: %d, Lat: %lf, Lon: %lf, Alt (sea): %lf, Alt (geo): %lf, Vel: %lf, Course: %lf\n",
 				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course);
 		have_time 	= false;
 		have_pos	= false;
 		have_vel 	= false;
+		BeaconWrite(beacon_fd, str, strlen(str)+1);
 	}
 }
 
@@ -100,7 +115,7 @@ ProcessRMC(
 			t.tm_min = min;
 			t.tm_sec = sec;
 			gps_time = mktime(&t);
-			//printf("%d:%d:%d %d-%d-%d ==>> %lu\n", hour, min, sec, day, mon, year, gps_time);
+			
 			have_time = true;
 			SetBeaconMessage();
 		}
@@ -133,7 +148,6 @@ ProcessGGA(
 			{
 				gps_lat 	= -1.0 * gps_lat;
 			}
-	        //printf("Lat: %f\n", gps_lat);
 			
 			degrees 	= strtof(str[3], NULL) / 100.0;
 	        decdegrees 	= (int) degrees;
@@ -143,15 +157,12 @@ ProcessGGA(
 			{
 				gps_lon 	= -1.0 * gps_lon;
 			}
-		 	//printf("Lat: %f\n", gps_lon);
 
 			gps_quality 	= strtol(str[5], NULL, 10);
 			gps_sv 			= strtol(str[6], NULL, 10);
 			gps_alt_sea 	= strtof(str[8], NULL);
 			gps_alt_geo 	= strtof(str[10], NULL);
-			/*printf("Lat: %f Lon: %f, Quality: %d, SV: %d, Altura(mar): %f m, Altura(geoid): %f m\n",
-						gps_lat, gps_lon, gps_quality, gps_sv, 
-						gps_alt_sea, gps_alt_geo);*/
+
 			have_pos = true;
 			SetBeaconMessage();
 		}
@@ -172,7 +183,7 @@ ProcessVTG(
 		{
 			gps_course 	= strtof(str[0], NULL);
 			gps_vel 	= strtof(str[6], NULL);
-			//printf("Course over Ground: %f, Km/h: %f\n", gps_course, gps_vel);
+
 			have_vel = true;
 			SetBeaconMessage();
 		}

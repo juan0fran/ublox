@@ -4,6 +4,8 @@
 #include <termios.h>		//Used for UART
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <stdint.h>
 
 #include <gps.h>
 
@@ -37,34 +39,11 @@ GPSChecksum(
 	*check_b = (unsigned char) CK_B & 0xFF;
 }
 
-static void SetTimeout(int fd, int timeout)
-{
- 	struct termios tty;
-    memset (&tty, 0, sizeof tty);
-    if (tcgetattr (fd, &tty) != 0)
-    {
-            exit(0);
-    }
-    if (timeout == 0)
-    {
-    	tty.c_cc[VMIN]  = 0;	
-    	tty.c_cc[VTIME] = 0;            // 0.5 seconds read timeout
-    }
-    else
-    {
-		tty.c_cc[VMIN]  = 1;
-    	tty.c_cc[VTIME] = (int) (timeout/100);            // 0.5 seconds read timeout
-    }
-    
-    if (tcsetattr (fd, TCSANOW, &tty) != 0)
-    	exit(0);
-}
-
 int
 OpenGPSIface(int ms_timeout)
 {
 	int uart0_filestream = -1;
-	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY);		//Open in non blocking read/write mode
+	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY);		//Open in blocking read/write mode
 	if (uart0_filestream == -1)
 	{
 		//ERROR - CAN'T OPEN SERIAL PORT
@@ -82,9 +61,43 @@ OpenGPSIface(int ms_timeout)
 
 	init_timeout = ms_timeout;
 	
-	SetTimeout(uart0_filestream, ms_timeout);
-
 	return uart0_filestream;
+}
+
+static int
+InputTimeout(
+	int fd, 
+	int milliseconds)
+{
+	fd_set set;
+	struct timeval timeout;
+	/* Initialize the file descriptor set. */
+	FD_ZERO (&set);
+	FD_SET (fd, &set);
+
+	/* Initialize the timeout data structure. */
+	timeout.tv_sec = 0;
+	timeout.tv_usec = milliseconds * 1000; /* microsec*1000
+
+	/* select returns 0 if timeout, 1 if input available, -1 if error. */
+	return (select (FD_SETSIZE, &set, NULL, NULL, &timeout));	
+}
+
+static int
+read_with_timeout(
+	int fd,
+	unsigned char * buff,
+	int len,
+	int timeout_ms)
+{
+	if (InputTimeout(fd, timeout_ms) > 0)
+	{
+		return read(fd, buff, len);
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 static int
@@ -102,7 +115,7 @@ GPSReceiveNMEA(
 	offset = 0;
 	do
 	{
-		if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+		if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 		{	
 			memcpy(recv_message+offset, rx_buffer, 1);
 			offset++;
@@ -146,11 +159,11 @@ GPSReceiveUBX(
 	int rx_len;
 	int offset;
 	int msg_len;
-	if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+	if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 	{
 		if (rx_buffer[0] == 0x62)
 		{
-			if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+			if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 			{
 				memcpy(recv_message, rx_buffer, 1);
 			}
@@ -158,7 +171,7 @@ GPSReceiveUBX(
 			{
 				return -1;
 			}
-			if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+			if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 			{
 				memcpy(recv_message+1, rx_buffer, 1);
 			}
@@ -166,7 +179,7 @@ GPSReceiveUBX(
 			{
 				return -1;
 			}
-			if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+			if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 			{
 				memcpy(recv_message+2, rx_buffer, 1);
 				msg_len = rx_buffer[0];
@@ -175,7 +188,7 @@ GPSReceiveUBX(
 			{
 				return -1;
 			}
-			if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+			if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 			{
 				msg_len |= rx_buffer[0]<<8;
 				memcpy(recv_message+3, rx_buffer, 1);
@@ -187,7 +200,7 @@ GPSReceiveUBX(
 			offset = 0;
 			while(offset < msg_len)
 			{
-				if (rx_len = read(uart_fd, rx_buffer, msg_len - offset), rx_len > 0 )
+				if (rx_len = read_with_timeout(uart_fd, rx_buffer, msg_len - offset, init_timeout), rx_len > 0 )
 				{
 					memcpy(recv_message+offset+4, rx_buffer, rx_len);
 					offset += rx_len;
@@ -199,7 +212,7 @@ GPSReceiveUBX(
 			}
 			if (offset == msg_len)		
 			{
-				if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+				if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 				{
 					crc1_c = rx_buffer[0];
 				}
@@ -207,7 +220,7 @@ GPSReceiveUBX(
 				{
 					return -1;
 				}
-				if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+				if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 				{
 					crc2_c = rx_buffer[0];
 				}
@@ -242,7 +255,7 @@ GPSReceiveMessage(
 {
 	unsigned char rx_buffer[1];
 	int rx_len;
-	if (rx_len = read(uart_fd, rx_buffer, 1), rx_len > 0 )
+	if (rx_len = read_with_timeout(uart_fd, rx_buffer, 1, init_timeout), rx_len > 0 )
 	{
 		if (rx_buffer[0] == (unsigned char) NMEA_ID)
 		{
@@ -329,9 +342,7 @@ PrintGPSUBXMessage(
 static void clean_read_buffer(int fd)
 {
 	unsigned char buffer[256];
-	SetTimeout(fd, 0);
-	while(read(fd, buffer, 256) > 0);
-	SetTimeout(fd, init_timeout);
+	while(read_with_timeout(fd, buffer, 256, 0) > 0);
 }
 
 int
@@ -340,7 +351,7 @@ GetGPSMessage(
 	MessageType t)
 {	
 	int limit = 4;
-	int recv_limit = 256;
+	int recv_limit = 512;
 	unsigned char buffer[256];
 	unsigned char recv_message[256];
 	unsigned char tmp;
@@ -348,13 +359,15 @@ GetGPSMessage(
 	int rx_len;
 	int i;
 	int timeout = 0;
+	int recv_timeout = 0;
 	int message_delivered = 0;
+	
 	clean_read_buffer(uart_fd);
 	while(!message_delivered && (++timeout < limit))
 	{
 		if (timeout > 1)
 		{
-			fprintf(stderr, "Message not deivered, trying again\n");
+			fprintf(stderr, "Message not delivered, trying again\n");
 		}
 		switch (t)
 		{
@@ -418,8 +431,8 @@ GetGPSMessage(
 				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
 			break;
 		}
-		timeout = 0;
-		while( (rx_len = read(uart_fd, buffer, 1), rx_len > 0 ) && message_delivered == 0 && (++timeout < recv_limit) )
+		recv_timeout = 0;
+		while( (rx_len = read_with_timeout(uart_fd, buffer, 1, init_timeout), rx_len > 0 ) && message_delivered == 0 && (++recv_timeout < recv_limit) )
 		{
 			if (buffer[0] == (unsigned char) UBX_ID)
 			{
@@ -458,7 +471,7 @@ GetGPSMessage(
 			}
 		}
 	}
-	return 0;
+	return message_delivered;
 }
 
 int 
@@ -472,9 +485,19 @@ SetGPSMessage(
 	int msg_len;
 	int rx_len;
 	int i;
+	int limit = 4;
+	int recv_limit = 512;
 	int message_delivered = 0;
-	while(!message_delivered)
+	int timeout = 0;
+	int recv_timeout = 0;
+	
+	clean_read_buffer(uart_fd);
+	while(!message_delivered && (++timeout < limit) )
 	{
+		if (timeout > 1)
+		{
+			fprintf(stderr, "Message not deivered, trying again\n");
+		}		
 		switch (t)
 		{
 			case CFG_NAV5:
@@ -541,7 +564,8 @@ SetGPSMessage(
 				write(uart_fd, buffer, msg_len + GPS_OVERHEAD);
 			break;
 		}
-		while( (rx_len = read(uart_fd, buffer, 1), rx_len > 0 ) && message_delivered == 0)
+		recv_timeout = 0;
+		while( (read_with_timeout(uart_fd, buffer, 1, init_timeout) ) && message_delivered == 0  && (++recv_timeout < recv_limit) )
 		{
 			if (buffer[0] == (unsigned char) UBX_ID)
 			{
@@ -557,5 +581,5 @@ SetGPSMessage(
 			}
 		}
 	}
-	return 0;
+	return message_delivered;
 }
