@@ -16,3 +16,13 @@ link_directories(${LIBRARY_OUTPUT_PATH})
 
 add_subdirectory(src)
 add_subdirectory(apps)
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/99-tempsensor.rules
+  DESTINATION /etc/udev/rules.d
+)
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/99-tempsensor.rules
+  DESTINATION /etc/udev/rules.d
+)

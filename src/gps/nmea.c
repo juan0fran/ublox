@@ -11,6 +11,7 @@
 static bool have_time;
 static bool have_pos;
 static bool have_vel;
+static bool have_temp;
 
 static unsigned long 	gps_time;
 static int 				gps_quality;
@@ -21,6 +22,7 @@ static double 			gps_alt_sea;
 static double 			gps_alt_geo;
 static double 			gps_vel;
 static double 			gps_course;
+static double 			sensor_temp;
 
 static int 				beacon_fd;
 
@@ -28,15 +30,18 @@ void
 initBeaconMessage(char * addr, char * port)
 {
 	beacon_fd = BeaconConnect(addr, port);
+	InitUSBTemp();
 	have_time 	= false;
 	have_pos	= false;
 	have_vel 	= false;
+	have_temp 	= false;
 }
 
 void
 closeBeaconMessage()
 {
 	BeaconClose(beacon_fd);
+	ExitUSBTemp();
 }
 
 static int
@@ -45,14 +50,15 @@ SetBeaconMessage()
 	char str[256];
 	if (have_time == true && have_vel == true && have_pos == true)
 	{	
-		sprintf(str, "%ld,%d,%d,%lf,%lf,%lf,%lf,%lf,%lf\r\n",
-				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course);
+		sprintf(str, "%ld,%d,%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf\r\n",
+				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp);
 		printf("%s", str);
-		printf("Time: %ld, Quality: %d, SV: %d, Lat: %lf, Lon: %lf, Alt (sea): %lf, Alt (geo): %lf, Vel: %lf, Course: %lf\n",
-				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course);
+		printf("Time: %ld, Quality: %d, SV: %d, Lat: %lf, Lon: %lf, Alt (sea): %lf, Alt (geo): %lf, Vel: %lf, Course: %lf, Temperature: %lf\n",
+				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp);
 		have_time 	= false;
 		have_pos	= false;
 		have_vel 	= false;
+		have_temp 	= false;
 		BeaconWrite(beacon_fd, str, strlen(str)+1);
 	}
 }
@@ -187,5 +193,16 @@ ProcessVTG(
 			have_vel = true;
 			SetBeaconMessage();
 		}
+	}
+}
+
+
+void 
+ProcessTemperature()
+{
+	if (have_temp == false)
+	{
+		sensor_temp = ReadUSBTemp();
+		have_temp = true;
 	}
 }
