@@ -24,12 +24,12 @@ static double 			gps_vel;
 static double 			gps_course;
 static double 			sensor_temp;
 
-static int 				beacon_fd;
+static BeaconMessageHandler bmh;
 
 void
 initBeaconMessage(char * addr, char * port)
 {
-	beacon_fd = BeaconConnect(addr, port);
+	BeaconConnect(addr, port, &bmh, beacon_sender);
 	InitUSBTemp();
 	have_time 	= false;
 	have_pos	= false;
@@ -40,7 +40,7 @@ initBeaconMessage(char * addr, char * port)
 void
 closeBeaconMessage()
 {
-	BeaconClose(beacon_fd);
+	BeaconClose(&bmh);
 	ExitUSBTemp();
 }
 
@@ -59,7 +59,7 @@ SetBeaconMessage()
 		have_pos	= false;
 		have_vel 	= false;
 		have_temp 	= false;
-		BeaconWrite(beacon_fd, str, strlen(str)+1);
+		BeaconWrite(&bmh, str, strlen(str)+1, GPS_TEMP);
 	}
 }
 
