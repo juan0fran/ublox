@@ -202,7 +202,7 @@ ProcessTemperature()
 {
 	if (have_temp == false)
 	{
-		sensor_temp = ReadUSBTemp();
+		ReadUSBTemp(&sensor_temp);
 		have_temp = true;
 	}
 }

@@ -322,12 +322,13 @@ void InitUSBTemp()
  interrupt_read(lvr_winusb);                                   
 }
 
-double ReadUSBTemp()
+void ReadUSBTemp(double * temp)
 {
   float tempc;
   control_transfer(lvr_winusb, uTemperatura );
   interrupt_read_temperatura(lvr_winusb, &tempc);
-  return ((double)tempc);
+  *temp = (double) tempc;
+  return;
 }
 
 

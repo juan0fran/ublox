@@ -2,7 +2,7 @@
 #define __PCSENSOR_H__
 
 void 	InitUSBTemp(void);
-double 	ReadUSBTemp(void);
+void 	ReadUSBTemp(double * temp);
 void 	ExitUSBTemp(void);
 
 #endif
