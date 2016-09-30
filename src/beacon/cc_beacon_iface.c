@@ -1,3 +1,4 @@
+#if 0
 #include <fcntl.h>      // File control definitions
 #include <errno.h>      // Error number definitions
 #include <string.h>
@@ -150,22 +151,4 @@ int BeaconRead (BeaconMessageHandler * bmh, BYTE * msg, int32_t maxbuflen, MsgSo
 	}
 	#endif
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#endif
