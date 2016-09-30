@@ -1,7 +1,7 @@
-file (GLOB example_sources example.c)
+file (GLOB gps_sources gps_core.c)
 
-set(EXAMPLE_BIN ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/example CACHE STRING "example dir")
+set(EXAMPLE_BIN ${PROJECT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}/gps_core CACHE STRING "gps_core dir")
 
-add_executable(example ${example_sources})
+add_executable(gps_process ${gps_sources})
 
-target_link_libraries(example ublox_gps cc_beacon_iface pcsensor)
+target_link_libraries(gps_process ublox_gps cc_beacon_iface pcsensor)

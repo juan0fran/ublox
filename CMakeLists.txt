@@ -23,6 +23,6 @@ install(
 )
 
 install(
-  FILES ${PROJECT_SOURCE_DIR}/99-tempsensor.rules
-  DESTINATION /etc/udev/rules.d
+  FILES ${EXECUTABLE_OUTPUT_PATH}/gps_process
+  DESTINATION /usr/bin
 )
