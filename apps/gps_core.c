@@ -57,7 +57,6 @@ main (void)
 					ProcessRMC(recv_message+6);
 					/* Time frame arrvied */
 				}
-				ProcessTemperature();
 			}
 		}
 	}

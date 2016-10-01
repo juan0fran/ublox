@@ -8,10 +8,12 @@
 #include <nmea.h>
 #include <gps.h>
 
+/* After 5 iterations of that, it will insert a msg */
+#define DUTY_CYCLE 5
+
 static bool have_time;
 static bool have_pos;
 static bool have_vel;
-static bool have_temp;
 
 static unsigned long 	gps_time;
 static int 				gps_quality;
@@ -26,6 +28,10 @@ static double 			sensor_temp;
 static double 			cpu_temp = 0.0;
 static double 			gpu_temp = 0.0;
 
+static int 				cycle_time;
+static int 				cycle_pos;
+static int 				cycle_vel;
+
 static BeaconMessageHandler bmh;
 
 void
@@ -36,7 +42,10 @@ initBeaconMessage(char * addr, char * port)
 	have_time 	= false;
 	have_pos	= false;
 	have_vel 	= false;
-	have_temp 	= false;
+
+	cycle_vel 	= 0;
+	cycle_pos 	= 0;
+	cycle_time 	= 0;
 }
 
 void
@@ -44,6 +53,13 @@ closeBeaconMessage()
 {
 	BeaconClose(&bmh);
 	ExitUSBTemp();
+	have_time 	= false;
+	have_pos	= false;
+	have_vel 	= false;
+
+	cycle_vel 	= 0;
+	cycle_pos 	= 0;
+	cycle_time 	= 0;	
 }
 
 static int
@@ -52,6 +68,7 @@ SetBeaconMessage()
 	char str[256];
 	if (have_time == true && have_vel == true && have_pos == true)
 	{
+		ProcessTemperature();
 		sprintf(str, "%ld,%d,%d,%.6lf,%.6lf,%.2lf,%.2lf,%.2lf,%.1lf,%.1lf,%.1lf,%.1lf\r\n",
 				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp, cpu_temp, gpu_temp);
 		printf("%s", str);
@@ -60,7 +77,11 @@ SetBeaconMessage()
 		have_time 	= false;
 		have_pos	= false;
 		have_vel 	= false;
-		have_temp 	= false;
+		
+		cycle_vel 	= 0;
+		cycle_pos 	= 0;
+		cycle_time 	= 0;
+
 		BeaconWrite(&bmh, str, strlen(str)+1, GPS_TEMP);
 	}
 }
@@ -108,7 +129,7 @@ ProcessRMC(
 	struct tm t;
 	int matches;
 
-	if (have_time == false)
+	if (have_time == false && (++cycle_time == DUTY_CYCLE))
 	{
 		matches = CommaParsing((char *) buff, 9, 20, str);
 		if (matches == 9)
@@ -142,7 +163,7 @@ ProcessGGA(
 
 	int matches;
 
-	if (have_pos == false)
+	if (have_pos == false && (++cycle_pos == DUTY_CYCLE))
 	{
 		matches = CommaParsing((char *) buff, 12, 20, str);
 		if (matches == 12)
@@ -184,7 +205,7 @@ ProcessVTG(
 	char str[8][20];
 	int matches;
 
-	if (have_vel == false)
+	if (have_vel == false && (++cycle_vel == DUTY_CYCLE))
 	{
 		matches = CommaParsing((char *) buff, 8, 20, str);
 		if (matches == 8)
@@ -205,30 +226,25 @@ ProcessTemperature()
     int t_aux = 0;
     FILE * cpufile;
     FILE * gpufile;
-
-	if (have_temp == false)
-	{
-        /* Reads internal temperature sensors: */
-        system("/opt/vc/bin/vcgencmd measure_temp > /home/pi/bbs/module_gps_temp/gpu_temp");
-        if((cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r")) == NULL) {
-            perror("Error opening CPU file");
-        } else {
-            fscanf(cpufile, "%d", &t_aux);
-            cpu_temp = t_aux / 1000.0;
-        }
-        if((gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r")) == NULL) {
-            perror("Error opening GPU file");
-        } else {
-            fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
-        }
-        if(cpufile != NULL) {
-            fclose(cpufile);
-        }
-        if(gpufile != NULL) {
-            fclose(gpufile);
-        }
-        /* Reads external USB temperature sensor: */
-		ReadUSBTemp(&sensor_temp);
-		have_temp = true;
-	}
+    /* Reads internal temperature sensors: */
+    system("/opt/vc/bin/vcgencmd measure_temp > /home/pi/bbs/module_gps_temp/gpu_temp");
+    if((cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r")) == NULL) {
+        perror("Error opening CPU file");
+    } else {
+        fscanf(cpufile, "%d", &t_aux);
+        cpu_temp = t_aux / 1000.0;
+    }
+    if((gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r")) == NULL) {
+        perror("Error opening GPU file");
+    } else {
+        fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
+    }
+    if(cpufile != NULL) {
+        fclose(cpufile);
+    }
+    if(gpufile != NULL) {
+        fclose(gpufile);
+    }
+    /* Reads external USB temperature sensor: */
+	ReadUSBTemp(&sensor_temp);
 }
