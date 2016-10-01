@@ -216,23 +216,23 @@ ProcessTemperature()
             perror("Error opening CPU file");
         } else {
             printf("CPU temp file opened\n");
-            fscanf(cpufile, "%d", t_aux);
+            fscanf(cpufile, "%d", &t_aux);
             cpu_temp = t_aux / 1000.0;
         }
         if((gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r")) == NULL) {
             perror("Error opening GPU file");
         } else {
-            printf("CPU temp file opened\n");
+            printf("GPU temp file opened\n");
             fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
+        }
+        if(cpufile != NULL) {
+            fclose(cpufile);
+        }
+        if(gpufile != NULL) {
+            fclose(gpufile);
         }
         /* Reads external USB temperature sensor: */
 		ReadUSBTemp(&sensor_temp);
 		have_temp = true;
 	}
-    if(cpufile != NULL) {
-        fclose(cpufile);
-    }
-    if(gpufile != NULL) {
-        fclose(gpufile);
-    }
 }
