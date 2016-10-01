@@ -8,6 +8,8 @@
 #include <nmea.h>
 #include <gps.h>
 
+#include "../../libraries/dbman.h"
+
 /* After 5 iterations of that, it will insert a msg */
 #define DUTY_CYCLE 5
 
@@ -66,6 +68,7 @@ static int
 SetBeaconMessage()
 {
 	char str[256];
+	GPS_data data;
 	if (have_time == true && have_vel == true && have_pos == true)
 	{
 		ProcessTemperature();
@@ -82,7 +85,20 @@ SetBeaconMessage()
 		cycle_pos 	= 0;
 		cycle_time 	= 0;
 
-		BeaconWrite(&bmh, str, strlen(str)+1, GPS_TEMP);
+		data.time_local = time(NULL);
+		data.time_gps 	= gps_time;
+		data.lat 		= gps_lat;
+		data.lng 		= gps_lon;
+		data.v_kph 		= gps_vel;
+		data.sea_alt 	= gps_alt_sea;
+		data.geo_alt 	= gps_alt_geo;
+		data.course 	= gps_course;
+		data.temp 		= sensor_temp;
+		data.cpu_temp 	= cpu_temp;
+		data.gpu_temp 	= gpu_temp;
+
+		dbman_save_gps_data(&data);
+		/*BeaconWrite(&bmh, str, strlen(str)+1, GPS_TEMP);*/
 	}
 }
 
