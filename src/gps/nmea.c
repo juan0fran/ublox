@@ -209,20 +209,16 @@ ProcessTemperature()
 	if (have_temp == false)
 	{
         /* Reads internal temperature sensors: */
-        printf("Generating GPU temp data\n");
         system("/opt/vc/bin/vcgencmd measure_temp > /home/pi/bbs/module_gps_temp/gpu_temp");
-        printf("Opening CPU temp file\n");
         if((cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r")) == NULL) {
             perror("Error opening CPU file");
         } else {
-            printf("CPU temp file opened\n");
             fscanf(cpufile, "%d", &t_aux);
             cpu_temp = t_aux / 1000.0;
         }
         if((gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r")) == NULL) {
             perror("Error opening GPU file");
         } else {
-            printf("GPU temp file opened\n");
             fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
         }
         if(cpufile != NULL) {
