@@ -1,4 +1,4 @@
-#if 0
+
 #ifndef __CC_BEACON_IFACE_H__
 #define __CC_BEACON_IFACE_H__
 
@@ -38,5 +38,4 @@ void 	BeaconClose (BeaconMessageHandler * bmh);
 int 	BeaconWrite (BeaconMessageHandler * bmh, BYTE * msg, int32_t len, MsgSource m);
 int 	BeaconRead (BeaconMessageHandler * bmh, BYTE * msg, int32_t maxbuflen, MsgSource * m); /* returns the source if wanted */
 
-#endif
 #endif
