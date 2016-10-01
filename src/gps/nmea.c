@@ -23,6 +23,8 @@ static double 			gps_alt_geo;
 static double 			gps_vel;
 static double 			gps_course;
 static double 			sensor_temp;
+static double 			cpu_temp = 0.0;
+static double 			gpu_temp = 0.0;
 
 static BeaconMessageHandler bmh;
 
@@ -46,15 +48,15 @@ closeBeaconMessage()
 
 static int
 SetBeaconMessage()
-{	
+{
 	char str[256];
 	if (have_time == true && have_vel == true && have_pos == true)
-	{	
-		sprintf(str, "%ld,%d,%d,%lf,%lf,%lf,%lf,%lf,%lf,%lf\r\n",
-				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp);
+	{
+		sprintf(str, "%ld,%d,%d,%.6lf,%.6lf,%.2lf,%.2lf,%.2lf,%.1lf,%.1lf,%.1lf,%.1lf\r\n",
+				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp, cpu_temp, gpu_temp);
 		printf("%s", str);
-		printf("Time: %ld, Quality: %d, SV: %d, Lat: %lf, Lon: %lf, Alt (sea): %lf, Alt (geo): %lf, Vel: %lf, Course: %lf, Temperature: %lf\n",
-				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp);
+		printf("Time: %ld, Quality: %d, SV: %d, Lat: %.6lf, Lon: %.6lf, Alt (sea): %.2lf, Alt (geo): %.2lf, Vel: %.1lf, Course: %.1lf, Temperature: %.1lf, CPU:%.1lf, GPU:%.1lf\n",
+				gps_time, gps_quality, gps_sv, gps_lat, gps_lon, gps_alt_sea, gps_alt_geo, gps_vel, gps_course, sensor_temp, cpu_temp, gpu_temp);
 		have_time 	= false;
 		have_pos	= false;
 		have_vel 	= false;
@@ -76,7 +78,7 @@ CommaParsing(
     int matches = 0;
 	/* safe use of buff */
 	strcpy(aux, buff);
-    pt = strsep(&aux,",");  
+    pt = strsep(&aux,",");
     while (pt != NULL)
     {
         strcpy(str[i], pt);
@@ -121,14 +123,14 @@ ProcessRMC(
 			t.tm_min = min;
 			t.tm_sec = sec;
 			gps_time = mktime(&t);
-			
+
 			have_time = true;
 			SetBeaconMessage();
 		}
 	}
 }
 
-void 
+void
 ProcessGGA(
 	unsigned char * buff)
 {
@@ -144,7 +146,7 @@ ProcessGGA(
 	{
 		matches = CommaParsing((char *) buff, 12, 20, str);
 		if (matches == 12)
-		{        
+		{
 			degrees 	= strtof(str[1], NULL) / 100.0;
 	        decdegrees 	= (int) degrees;
 	        minutes  	= (double) (degrees - decdegrees)*100.0;
@@ -154,7 +156,7 @@ ProcessGGA(
 			{
 				gps_lat 	= -1.0 * gps_lat;
 			}
-			
+
 			degrees 	= strtof(str[3], NULL) / 100.0;
 	        decdegrees 	= (int) degrees;
 	        minutes  	= (double) (degrees - decdegrees)*100.0;
@@ -197,11 +199,23 @@ ProcessVTG(
 }
 
 
-void 
+void
 ProcessTemperature()
 {
+    int t_aux = 0;
+    FILE * cpufile;
+    FILE * gpufile;
+
 	if (have_temp == false)
 	{
+        /* Reads internal temperature sensors: */
+        system("/opt/vc/bin/vcgencmd measure_temp > /home/pi/bbs/module_gps_temp/gpu_temp");
+        cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
+        gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r");
+        fscanf(cpufile, "%d", t_aux);
+        fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
+        cpu_temp = t_aux / 1000.0;
+        /* Reads external USB temperature sensor: */
 		ReadUSBTemp(&sensor_temp);
 		have_temp = true;
 	}
