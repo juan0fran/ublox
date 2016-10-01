@@ -210,11 +210,17 @@ ProcessTemperature()
 	{
         /* Reads internal temperature sensors: */
         system("/opt/vc/bin/vcgencmd measure_temp > /home/pi/bbs/module_gps_temp/gpu_temp");
-        cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
-        gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r");
-        fscanf(cpufile, "%d", t_aux);
-        fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
-        cpu_temp = t_aux / 1000.0;
+        if((cpufile = fopen("/sys/class/thermal/thermal_zone0/temp", "r")) == NULL) {
+            perror("Error opening CPU file");
+        } else {
+            fscanf(cpufile, "%d", t_aux);
+            cpu_temp = t_aux / 1000.0;
+        }
+        if((gpufile = fopen("/home/pi/bbs/module_gps_temp/gpu_temp", "r")) == NULL) {
+            perror("Error opening GPU file");
+        } else {
+            fscanf(gpufile, "%*[^=] %*[=]%lf", &gpu_temp);
+        }
         /* Reads external USB temperature sensor: */
 		ReadUSBTemp(&sensor_temp);
 		have_temp = true;
