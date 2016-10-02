@@ -39,7 +39,6 @@ static BeaconMessageHandler bmh;
 void
 initBeaconMessage(char * addr, char * port)
 {
-	BeaconConnect(addr, port, &bmh, beacon_sender);
 	InitUSBTemp();
 	have_time 	= false;
 	have_pos	= false;
@@ -53,7 +52,6 @@ initBeaconMessage(char * addr, char * port)
 void
 closeBeaconMessage()
 {
-	BeaconClose(&bmh);
 	ExitUSBTemp();
 	have_time 	= false;
 	have_pos	= false;
