@@ -61,7 +61,7 @@ closeBeaconMessage()
 
 	cycle_vel 	= 0;
 	cycle_pos 	= 0;
-	cycle_time 	= 0;	
+	cycle_time 	= 0;
 }
 
 static int
@@ -80,13 +80,13 @@ SetBeaconMessage()
 		have_time 	= false;
 		have_pos	= false;
 		have_vel 	= false;
-		
+
 		cycle_vel 	= 0;
 		cycle_pos 	= 0;
 		cycle_time 	= 0;
 
-		data.time_local = time(NULL);
-		data.time_gps 	= gps_time;
+        sprintf(data.time_local, "%11ld", time(NULL));
+        sprintf(data.time_local, "%11ld", gps_time);
 		data.lat 		= gps_lat;
 		data.lng 		= gps_lon;
 		data.v_kph 		= gps_vel;
