@@ -86,7 +86,7 @@ SetBeaconMessage()
 		cycle_time 	= 0;
 
         sprintf(data.time_local, "%11ld", time(NULL));
-        sprintf(data.time_local, "%11ld", gps_time);
+        sprintf(data.time_gps,   "%11ld", gps_time);
 		data.lat 		= gps_lat;
 		data.lng 		= gps_lon;
 		data.v_kph 		= gps_vel;
