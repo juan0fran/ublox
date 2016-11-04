@@ -195,7 +195,7 @@ ProcessGGA(
 			degrees 	= strtof(str[3], NULL) / 100.0;
 	        decdegrees 	= (int) degrees;
 	        minutes  	= (double) (degrees - decdegrees)*100.0;
-			gps_lon 	= (double) ((double)degrees*1.0) + (minutes/60.0);
+			gps_lon 	= (double) ((double)decdegrees*1.0) + (minutes/60.0);
 			if (str[4][0] == 'W')
 			{
 				gps_lon 	= -1.0 * gps_lon;
